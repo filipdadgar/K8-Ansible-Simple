@@ -14,37 +14,30 @@
           - python3-pip
         state: present
 
-- name: Install Docker
+- name: Install and configure containerd
   hosts: all
   become: yes
   tasks:
-    - name: Add Docker repository
-      apt_repository:
-        repo: deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
-        state: present
-        filename: docker-ce
-      register: docker_repo_added
-
-    - name: Add Docker GPG key
-      apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        keyring: /usr/share/keyrings/docker-archive-keyring.gpg
-        state: present
-      when: docker_repo_added.changed
-
-    - name: Install Docker
+    - name: Install containerd
       apt:
         name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
+          - containerd
         state: present
         update_cache: yes
 
-    - name: Enable and start Docker
+    - name: Configure containerd
+      command: "{{ item }}"
+      with_items:
+        - mkdir -p /etc/containerd
+        - containerd config default > /etc/containerd/config.toml
+      args:
+        creates: /etc/containerd/config.toml
+
+    - name: Restart containerd
       systemd:
-        name: docker
-        state: started
+        name: containerd
+        state: restarted
+        daemon_reload: yes
         enabled: yes
 
 - name: Install Kubernetes components
@@ -125,3 +118,4 @@
       command: kubeadm join 192.168.1.1:6443 --token {{ join_token.stdout }} --discovery-token-unsafe-skip-ca-verification
       args:
         creates: /etc/kubernetes/kubelet.conf
+
