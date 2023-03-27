@@ -1,0 +1,127 @@
+---
+- name: Install common packages
+  hosts: all
+  become: yes
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg-agent
+          - software-properties-common
+          - python3-pip
+        state: present
+
+- name: Install Docker
+  hosts: all
+  become: yes
+  tasks:
+    - name: Add Docker repository
+      apt_repository:
+        repo: deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+        state: present
+        filename: docker-ce
+      register: docker_repo_added
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        keyring: /usr/share/keyrings/docker-archive-keyring.gpg
+        state: present
+      when: docker_repo_added.changed
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+
+    - name: Enable and start Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+- name: Install Kubernetes components
+  hosts: all
+  become: yes
+  tasks:
+    - name: Add Kubernetes repository
+      apt_repository:
+        repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+        state: present
+        filename: kubernetes
+
+    - name: Add Kubernetes GPG key
+      apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        state: present
+
+    - name: Install Kubernetes components
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+        update_cache: yes
+
+    - name: Hold Kubernetes components at their current version
+      apt:
+        name: "{{ item }}"
+        state: held
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl
+
+- name: Initialize Kubernetes master
+  hosts: masters
+  become: yes
+  tasks:
+    - name: Initialize Kubernetes master
+      command: kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address={{ inventory_hostname }} --apiserver-cert-extra-sans=192.168.0.0/22
+      args:
+        creates: /etc/kubernetes/admin.conf
+      register: kubeadm_init
+
+    - name: Copy kubeconfig to regular user
+      command: "{{ item }}"
+      with_items:
+        - mkdir -p $HOME/.kube
+        - cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+        - chown $(id -u):$(id -g) $HOME/.kube/config
+      when: kubeadm_init is changed
+
+- name: Setup Flannel CNI
+  hosts: masters
+  become: yes
+  tasks:
+    - name: Apply Flannel CNI
+      command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+      args:
+        creates: /etc/cni/net.d/10-flannel.conflist
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Join worker nodes to the cluster
+  hosts: workers
+  become: yes
+  tasks:
+    - name: Get join command
+      become: no
+      shell: kubectl get cm kubeadm-config -o jsonpath='{.data.ClusterConfiguration}' -n kube-system | grep "token:" | awk '{print $2}'
+      register: join_token
+      delegate_to: 192.168.1.1
+      when: "'192.168.1.1' in inventory_hostname"
+      run_once: true
+
+    - name: Join the cluster
+      command: kubeadm join 192.168.1.1:6443 --token {{ join_token.stdout }} --discovery-token-unsafe-skip-ca-verification
+      args:
+        creates: /etc/kubernetes/kubelet.conf
