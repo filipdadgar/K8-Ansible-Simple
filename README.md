@@ -10,7 +10,7 @@ ansible-playbook -i inventory.ini k8s-setup.yaml
 
 **Note:** The playbook is designed to be idempotent. You can run it multiple times without any issues.
 
-* For a HA setup, modify the inventory file:
+**For a HA setup, modify the inventory file:**
 
 ```python
 [masters]
@@ -55,7 +55,7 @@ Here is an example for HAProxy:
 Install HAProxy on a separate node or one of the existing nodes.
 Create an HAProxy configuration file, e.g., haproxy.cfg, with the following content:
     
-    ```python
+```python
     global
     log /dev/log local0
     log /dev/log local1 notice
@@ -92,14 +92,14 @@ backend kubernetes-backend
     server master-4 192.168.1.4:6443 check
 ```
 
-* Start HAProxy:
+Start HAProxy:
 
 ```python
 sudo systemctl start haproxy
 sudo systemctl enable haproxy
 ```
 
-* Update the k8s-setup.yaml file with the HAProxy IP address:
+Update the k8s-setup.yaml file with the HAProxy IP address:
 
 ```python
 - name: Join additional master nodes to the cluster
