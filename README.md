@@ -6,4 +6,4 @@ To run the playbook, execute the following command:
 ansible-playbook -i inventory.ini k8s-setup.yaml
 ```
 
-# After the playbook finishes, you should have a fully functional Kubernetes cluster with containerd as the container runtime and Flannel as the CNI. The API server should be reachable from the 192.168.0.0/22 subnet. Make sure to copy the /etc/kubernetes/admin.conf file from the master node to your local machine to interact with the cluster using kubectl.
+**After the playbook finishes, you should have a fully functional Kubernetes cluster with containerd as the container runtime and Flannel as the CNI. The API server should be reachable from the 192.168.0.0/22 subnet. Make sure to copy the /etc/kubernetes/admin.conf file from the master node to your local machine to interact with the cluster using kubectl.**
